@@ -4,7 +4,13 @@ const fs = require('fs');
 
 // 配置
 const CONFIG = {
-  editorUrl: process.env.EDITOR_URL || 'http://localhost:8080',
+  // 默认 URL 列表（按优先级排序）
+  editorUrls: [
+    'http://localhost:8080',           // 本地开发优先
+    'https://web-ai-media-editor.cn',  // 主域名
+    'https://web-ai-media-editor.xyz'  // 备用域名
+  ],
+  editorUrl: null, // 将在启动时动态检测
   scraperPort: process.env.SCRAPER_PORT || 3100,
   devMode: !app.isPackaged
 };
@@ -323,6 +329,57 @@ async function startScraperServer() {
   });
 }
 
+// ==================== URL 可用性检测 ====================
+
+async function checkUrlAvailability(url, timeout = 3000) {
+  const http = url.startsWith('https') ? require('https') : require('http');
+  
+  return new Promise((resolve) => {
+    const req = http.get(url, { timeout }, (res) => {
+      // 2xx 或 3xx 都算成功
+      resolve(res.statusCode >= 200 && res.statusCode < 400);
+    });
+    
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    
+    // 额外的超时保护
+    setTimeout(() => {
+      req.destroy();
+      resolve(false);
+    }, timeout + 500);
+  });
+}
+
+async function detectBestEditorUrl() {
+  // 如果环境变量指定了 URL，直接使用
+  if (process.env.EDITOR_URL) {
+    console.log('[Box] Using EDITOR_URL from environment:', process.env.EDITOR_URL);
+    return process.env.EDITOR_URL;
+  }
+  
+  console.log('[Box] Detecting best editor URL...');
+  
+  for (const url of CONFIG.editorUrls) {
+    console.log(`[Box] Checking ${url}...`);
+    const isAvailable = await checkUrlAvailability(url);
+    
+    if (isAvailable) {
+      console.log(`[Box] ✓ ${url} is available`);
+      return url;
+    } else {
+      console.log(`[Box] ✗ ${url} is not available`);
+    }
+  }
+  
+  // 如果都不可用，返回第一个在线域名（用户可能需要等待网络）
+  console.log('[Box] No URL available, defaulting to primary domain');
+  return CONFIG.editorUrls[1]; // 返回主域名
+}
+
 // ==================== 连接检查 ====================
 
 async function waitForScraper(maxRetries = 10) {
@@ -473,12 +530,23 @@ function createWindow() {
 
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
     console.error(`[Box] Failed to load ${validatedURL}: ${errorDescription}`);
+    
+    // 构建备用 URL 按钮
+    const alternativeButtons = CONFIG.editorUrls
+      .filter(url => url !== validatedURL)
+      .map(url => `<button onclick="location.href='${url}'" style="margin:5px">🔗 ${url}</button>`)
+      .join('');
+    
     const errorHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>连接失败</title>
       <style>body{font-family:sans-serif;background:#1a1a2e;color:#fff;display:flex;justify-content:center;align-items:center;height:100vh;margin:0}
-      .container{text-align:center;padding:40px;background:rgba(255,255,255,0.1);border-radius:16px;max-width:500px}
-      h1{color:#ff6b6b}button{background:#3b82f6;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;margin-top:20px}</style></head>
+      .container{text-align:center;padding:40px;background:rgba(255,255,255,0.1);border-radius:16px;max-width:600px}
+      h1{color:#ff6b6b}button{background:#3b82f6;color:white;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;margin-top:10px;font-size:14px}
+      button:hover{background:#2563eb}.alternatives{margin-top:20px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.2)}
+      .alternatives h3{color:#94a3b8;font-size:14px;margin-bottom:10px}</style></head>
       <body><div class="container"><h1>⚠️ 无法连接到 Editor</h1><p>地址: ${validatedURL}</p><p>错误: ${errorDescription}</p>
-      <button onclick="location.reload()">🔄 重试</button></div></body></html>`;
+      <button onclick="location.reload()">🔄 重试当前地址</button>
+      <div class="alternatives"><h3>尝试其他地址：</h3>${alternativeButtons}</div>
+      </div></body></html>`;
     mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`);
   });
 
@@ -495,16 +563,20 @@ app.whenReady().then(async () => {
 
   nativeTheme.themeSource = 'dark';
 
-  // 1. 启动内置 scraper 服务器
+  // 1. 检测最佳 Editor URL
+  CONFIG.editorUrl = await detectBestEditorUrl();
+  console.log('[Box] Selected editor URL:', CONFIG.editorUrl);
+
+  // 2. 启动内置 scraper 服务器
   await startScraperServer();
   
-  // 2. 等待 scraper 就绪
+  // 3. 等待 scraper 就绪
   await waitForScraper();
 
-  // 3. 创建窗口
+  // 4. 创建窗口
   createWindow();
 
-  // 4. 启动连接状态检查
+  // 5. 启动连接状态检查
   startConnectionCheck();
 
   // 5. 注册快捷键
