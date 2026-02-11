@@ -1,5 +1,7 @@
 # V-Editor
 
+**[English](README_EN.md)** | 中文
+
 <p align="center">
   <img src="https://img.shields.io/badge/AI-Video%20Editor-FF6B6B?logo=openai" alt="AI Video Editor">
   <img src="https://img.shields.io/badge/MCP-Protocol-47848F" alt="MCP Protocol">
