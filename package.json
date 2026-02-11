@@ -1,0 +1,56 @@
+{
+  "name": "v-editor-box",
+  "version": "1.0.0",
+  "description": "V-Editor 客户端盒子 - 内置素材爬虫服务",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:scraper": "tsc -p tsconfig.json",
+    "dev": "npm run build:scraper && electron .",
+    "build": "npm run build:scraper && electron-builder",
+    "build:win": "npm run build:scraper && electron-builder --win",
+    "build:mac": "npm run build:scraper && electron-builder --mac",
+    "build:linux": "npm run build:scraper && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.veditor.box",
+    "productName": "V-Editor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "scraper-dist/**/*",
+      "storage/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "cors": "^2.8.5",
+    "crawlee": "^3.0.0",
+    "duck-duck-scrape": "^2.2.7",
+    "express": "^4.18.2",
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.0.0",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "typescript": "^5.0.0"
+  }
+}
